@@ -1,12 +1,13 @@
 #include "mpi.h"
 #include <vector>
 #include <iostream>
+#include <chrono>  
 #include <random>
 #include <algorithm>
 #include <cmath>
 
-const int N=6; 					//Esto no funciona si no esta en potencia de dos
-const int RANGE = 999;
+const int N = 8; 					//Esto no funciona si no esta en potencia de dos
+const int RANGE = 99;
 
 // mpirun -host localhost -np 4 ./mpi
 int main (int argc, char *argv[]) 
@@ -24,7 +25,7 @@ int main (int argc, char *argv[])
 
 	auto amountperprocess = (int)std::round(N/size); 
 
-	auto Arow= new int[amountperprocess];
+	auto Arow = new int[amountperprocess];
 	std::vector<int> nums(N);
 	
 	if (rank == 0){
