@@ -1,33 +1,37 @@
 #include "mpi.h"
 #include <vector>
 #include <iostream>
+#include <chrono>  
 #include <random>
 #include <algorithm>
 #include <cmath>
 
-const int N=7;
-const int RANGE=100;
+const int N = 8; 					//Esto no funciona si no esta en potencia de dos
+const int RANGE = 99;
 
 // mpirun -host localhost -np 4 ./mpi
-int main (int argc, char *argv[]) {
-	MPI_Init (&argc, &argv); // Initialize MPI envirnmnt
+int main (int argc, char *argv[]) 
+{
+	MPI_Init (&argc, &argv); 							// Initialize MPI enviroment
 	int rank, size, namelen;
 	char name[MPI_MAX_PROCESSOR_NAME];
-	MPI_Comm_rank (MPI_COMM_WORLD, &rank); // ID of current process
-	MPI_Get_processor_name (name, &namelen); // Hostname of node
-	MPI_Comm_size (MPI_COMM_WORLD, &size); // Number of processes
+
+	MPI_Comm_rank (MPI_COMM_WORLD, &rank); 				// ID of current process
+	MPI_Get_processor_name (name, &namelen); 			// Hostname of node
+	MPI_Comm_size (MPI_COMM_WORLD, &size); 				// Number of processes
+
 	//std::cout<<"Hello World from rank "<<rank<<" running on"<<name<<"!\n";
 	//if (rank == 0) std::cout<<"MPI World size = "<<size<<" processes\n";
 
 	auto amountperprocess = (int)std::round(N/size); 
 
-	//for clients (and master)
-	//auto B= new int[N][N];
-	auto Arow= new int[amountperprocess];
+	auto Arow = new int[amountperprocess];
 	std::vector<int> nums(N);
 	
 	if (rank == 0){
-    	std::mt19937 rng; // default constructed, seeded with fixed seed
+		auto seed = std::chrono::system_clock::now().time_since_epoch().count();	
+		//std::mt19937 rng;															// non-random seed
+    	std::mt19937 rng {seed}; 													// random seed
     	std::generate(nums.begin(),nums.end(),[&](){return rng()%RANGE;});
 
 
