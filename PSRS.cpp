@@ -11,7 +11,7 @@ const int PROCESSOR = 4;
 void Swap(int* a, int* b);
 int Partition (int *array, int low, int high) ;
 void QuickSort(int *array, int low, int high);
-void PSRS();
+std::vector<int> PSRS(std::vector<int> array, int rank);
 
 
 int main(int argc, char *argv[])
@@ -22,19 +22,8 @@ int main(int argc, char *argv[])
 	MPI_Comm_rank (MPI_COMM_WORLD, &rank); // ID of current process
 	MPI_Get_processor_name (name, &namelen); // Hostname of node
 	MPI_Comm_size (MPI_COMM_WORLD, &size); // Number of processes
-
     
-    
-}
-
-
-void PSRS()
-{
-
-    std::vector<int> array(N); // -> initial vector
-    int *toSort; // -> disjointed vector where the sorting will be performed
-
-    // BEGIN STEP 1 //
+    std::vector<int> array(N);
 
     if(rank == 0)
     {
@@ -45,7 +34,39 @@ void PSRS()
             rng.seed(i);
             std::generate(array.begin(),array.end(),[&](){return rng()%RANGE;});
         }
+        std::cout<<"unrodered array :"<<std::endl;
+        for(int i = 0; i < N; i++)
+        {
+            std::cout<<" " << array[i] << " -"; 
+        }
+        std::cout<<std::endl<<std::endl;
+    }
+    MPI_Bcast(array.data(), N, MPI_INT, 0, MPI_COMM_WORLD);
+    array = PSRS(array, rank);
 
+    if(rank == 0)
+    {
+        std::cout<<" Vector: "<<std::endl; 
+        for(int i = 0; i < N; i++)
+        {
+            std::cout<<" " << array[i] << " -"; 
+        }
+    }
+    
+}
+
+
+std::vector<int> PSRS(std::vector<int> array, int rank)
+{
+    int *toSort = new int[N/PROCESSOR]; // -> disjointed vector where the sorting will be performed
+
+    // BEGIN STEP 1 //
+
+    if(rank == 0)
+    {
+        MPI_Scatter(array.data(), N/PROCESSOR, MPI_INT, toSort, N/PROCESSOR, MPI_INT, 0, MPI_COMM_WORLD);
+    }
+    /*
         //partition and send initial vector among processors
         for(int i = 1; i < PROCESSOR; i++)
         {
@@ -59,9 +80,35 @@ void PSRS()
     {
         toSort = new int[N/PROCESSOR]; // -> initialization of array to set to buffer size
         MPI_Recv(toSort, N/PROCESSOR, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE); // -> receive vector tract from rank 0
+    }*/
+
+    if(rank == 0)
+    {
+        std::cout<<" ToSort "<<std::endl;
+        int x;
+        for(x = 0; x < N/PROCESSOR; x++)
+        {
+            std::cout<<toSort[x]<<" - ";
+        }
+        std::cout<<std::endl;
+        //std::cout<<"rank "<<rank<<" size of array to Sort: "<<x<<std::endl;
     }
 
-    QuickSort(toSort, toSort[0], toSort[N/PROCESSOR]); //-> apply quicksort in all processors
+    std::cout<<" Sorting "<<std::endl;
+    QuickSort(toSort, 0, N/PROCESSOR); //-> apply quicksort in all processors
+
+    if(rank == 0)
+    {
+        std::cout<<" Sorted "<<std::endl;
+        int x;
+        for(x = 0; x < N/PROCESSOR; x++)
+        {
+            std::cout<<toSort[x]<<" - ";
+        }
+        std::cout<<std::endl;
+        //std::cout<<"rank "<<rank<<" size of array to Sort: "<<x<<std::endl;
+    }
+    
 
     // END STEP 1 //
 
@@ -76,18 +123,22 @@ void PSRS()
         for(int i = 0; i < PROCESSOR; i++)
         {
             candidatePivots[i] = toSort[i*(N/PROCESSOR*PROCESSOR)]; //  -> N/PROCESSOR*PROCESSOR = (N/PROCESSOR)/PROCESSOR
+            std::cout<<"rank "<<rank<< "| pivot "<<i<<": "<<candidatePivots[i]<<std::endl;
+
         }
+
         for(int i = 1; i < PROCESSOR; i++)
         {
             MPI_Recv(&candidatePivots[(i)*PROCESSOR], PROCESSOR, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
-        QuickSort(candidatePivots, candidatePivots[0], candidatePivots[PROCESSOR*PROCESSOR - 1])
+        
+        QuickSort(candidatePivots, candidatePivots[0], candidatePivots[PROCESSOR*PROCESSOR - 1]);
 
         for(int i = 0; i < PROCESSOR - 1; i++)
         {
             pivots[i] = candidatePivots[(i+1)*PROCESSOR]; // -> (i+1)*PROCESSOR = (i+1)*(PROCESSOR*PROCESSOR/PROCESSOR)
         }
-        MPI_BCAST(pivots, PROCESSOR-1, MPI_INT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(pivots, PROCESSOR-1, MPI_INT, 0, MPI_COMM_WORLD);
 
     }
     else
@@ -96,14 +147,76 @@ void PSRS()
         for(int i = 0; i < PROCESSOR; i++)
         {
             pivots[i] = toSort[i*(N/PROCESSOR*PROCESSOR)];
+            std::cout<<"rank "<<rank<< "| pivot "<<i<<": "<<pivots[i]<<std::endl;
         }
-        MPI_SEND(pivots, PROCESSOR, MPI_INT, 0, 0, MPI_COMM_WORLD);
+        MPI_Send(pivots, PROCESSOR, MPI_INT, 0, 0, MPI_COMM_WORLD);
     }
 
     // END STEP 2 //
 
+    // BEGIN STEP 3 //
+
+    //calcular largo de datos a enviar y luego enviar con scatter y scatterV
+
+    int lastIndex = 0;
+    int transferAmount;
+
     
 
+    for(int i = 0; i < PROCESSOR -1 ; i++)
+    {
+        for(int j = lastIndex; j < N/PROCESSOR; j++)
+        {
+            if(toSort[j] <= pivots[i]) continue;
+            transferAmount = j - lastIndex + 1;
+            std::cout<<"rank = "<<rank<<" / transfer amount = "<<transferAmount<<std::endl;
+            MPI_Send(&transferAmount, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&toSort[j], transferAmount, MPI_INT, i, 1, MPI_COMM_WORLD);
+            lastIndex = j;
+            break;
+        }
+    }
+    transferAmount = (N/PROCESSOR) - 1 -lastIndex;
+    MPI_Send(&transferAmount, 1, MPI_INT, PROCESSOR - 1, 0, MPI_COMM_WORLD);
+    MPI_Send(&toSort[lastIndex], transferAmount, MPI_INT, PROCESSOR - 1, 1, MPI_COMM_WORLD);
+
+    // END STEP 3 //
+
+    // BEGIN STEP 4 //
+
+    lastIndex = 0;
+
+    for(int i = 0; i < PROCESSOR; i++)
+    {
+        MPI_Recv(&transferAmount, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&toSort[lastIndex], transferAmount, MPI_INT, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        lastIndex += transferAmount;
+    }
+
+    // END STEP 4 //
+
+    // FINAL STEP //
+
+    transferAmount = lastIndex;
+
+    for(int i = 0; i < PROCESSOR; i++)
+    {
+        MPI_Send(&transferAmount, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+        MPI_Send(toSort, transferAmount, MPI_INT, 0, 1, MPI_COMM_WORLD);
+    }
+
+    if(rank == 0)
+    {
+        lastIndex = 0;
+        for(int i = 0; i < PROCESSOR; i++)
+        {
+            MPI_Recv(&transferAmount, 1, MPI_INT, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(array.data() + lastIndex, transferAmount, MPI_INT, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            lastIndex += transferAmount;
+        }
+    }
+
+    return array;
 }
 
 
