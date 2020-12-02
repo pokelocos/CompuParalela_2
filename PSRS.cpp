@@ -70,17 +70,7 @@ std::vector<int> PSRS(std::vector<int> array, int rank)
     
     MPI_Scatter(array.data(), N/PROCESSOR, MPI_INT, toSort, N/PROCESSOR, MPI_INT, 0, MPI_COMM_WORLD);
     
-    QuickSort(toSort, 0, N/PROCESSOR); //-> apply quicksort in all processors
-
-    if(rank == 0)
-    {
-        std::cout<<" Vector: "<<std::endl; 
-        for(int i = 0; i < N/PROCESSOR; i++)
-        {
-            std::cout<<" " << toSort[i] << " -"; 
-        }
-        std::cout << std::endl << std::endl;
-    }
+    QuickSort(toSort, 0, N/PROCESSOR - 1); //-> apply quicksort in all processors
 
     // END STEP 1 //
 
@@ -102,7 +92,7 @@ std::vector<int> PSRS(std::vector<int> array, int rank)
 
     if(rank == 0)
     {        
-        QuickSort(candidatePivots, 0, PROCESSOR*PROCESSOR);
+        QuickSort(candidatePivots, 0, PROCESSOR*PROCESSOR - 1);
         for(int i = 0; i < PROCESSOR - 1; i++)
         {
             pivots[i] = candidatePivots[(i+1)*PROCESSOR]; // -> (i+1)*PROCESSOR = (i+1)*(PROCESSOR*PROCESSOR/PROCESSOR)
@@ -126,22 +116,35 @@ std::vector<int> PSRS(std::vector<int> array, int rank)
         lastIndex = i;
         sizes[j] = lastIndex - indexes[j];
         j++;
+        if(j >= PROCESSOR - 1) break;
     }
     indexes[j] = lastIndex;
     sizes[j] = N/PROCESSOR - indexes[j];
-
+    
+    /*
+    for(int i = 0; i < PROCESSOR; i++)
+    {
+        std::cout<<"rank "<<rank<<" index: "<<indexes[i]<<" - "<<std::endl; 
+        std::cout<<"rank "<<rank<<" sizes: "<<sizes[i]<<" - "<<std::endl; 
+    } */    
     // END STEP 3 //
 
     // BEGIN STEP 4 //
 
     std::vector<int> sorted;
 
+/*
+    for(int i = 0; i < N/PROCESSOR - 1; i++)
+    {
+        std::cout<<"rank "<<rank<<": "<<toSort[i]<<" - "<<std::endl;
+    }*/
+
     MPI_Scatterv(toSort, sizes, indexes, MPI_INT, sorted.data(), 0, MPI_INT, rank, MPI_COMM_WORLD);
     // END STEP 4 //
 
     // FINAL STEP //
 
-    int length = sorted.end() - sorted.begin();
+    int length = sorted.end() - sorted.begin();   
     
     MPI_Gather(&length, 1, MPI_INT, sizes, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
@@ -184,7 +187,7 @@ int Partition (int *array, int low, int high)
 			Swap(&array[i], &array[j]); 
 		} 
 	} 
-	//Swap(&array[i + 1], &array[high]); 
+	Swap(&array[i + 1], &array[high]); 
 	return (i + 1); 
 } 
 
