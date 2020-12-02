@@ -3,6 +3,8 @@
 #include <iostream>
 #include <random>
 #include <algorithm>
+#include <chrono>  
+#include <cmath>
 
 const int N = 100;
 const int RANGE = 100000;
@@ -209,3 +211,48 @@ void QuickSort(int *array, int low, int high)
 		QuickSort(array, pi + 1, high); 
 	} 
 } 
+
+
+int MPI_f (int argc, char *argv[],const int N,const int RANGE) 
+{
+	MPI_Init (&argc, &argv); 							// Initialize MPI enviroment
+	int rank, size, namelen;
+	char name[MPI_MAX_PROCESSOR_NAME];
+
+	MPI_Comm_rank (MPI_COMM_WORLD, &rank); 				// ID of current process
+	MPI_Get_processor_name (name, &namelen); 			// Hostname of node
+	MPI_Comm_size (MPI_COMM_WORLD, &size); 				// Number of processes
+
+	auto amountperprocess = (int)std::round(N/size); 
+
+	auto Arow = new int[amountperprocess];
+	std::vector<int> nums(N);
+	
+	if (rank == 0){
+		auto seed = std::chrono::system_clock::now().time_since_epoch().count();	
+		//std::mt19937 rng;															// non-random seed
+    	std::mt19937 rng {seed}; 													// random seed
+    	std::generate(nums.begin(),nums.end(),[&](){return rng()%RANGE;});
+	}
+
+	MPI_Scatter(nums.data(), amountperprocess, MPI_INT, Arow, amountperprocess, MPI_INT, 0, MPI_COMM_WORLD);
+
+	std::sort(Arow, Arow + amountperprocess) ;
+	MPI_Gather( Arow, amountperprocess, MPI_INT, nums.data(), amountperprocess, MPI_INT, 0, MPI_COMM_WORLD);
+
+	if (rank == 0){
+
+		for(int step=size;step>1;step/=2){
+			for(int i=0;i<step;i+=2){
+				std::inplace_merge(nums.begin()+i*N/step,nums.begin()+(i+1)*N/step,nums.begin()+(i+2)*N/step);
+			}
+		}
+
+		auto print = [](const int& n) { std::cout << " " << n; };
+     	std::for_each(std::begin(nums), std::end(nums), print);
+    	std::cout<<std::endl;
+
+	}		
+
+	MPI_Finalize (); // Terminate MPI environment
+}
