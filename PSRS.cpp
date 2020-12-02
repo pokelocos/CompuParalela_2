@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <chrono>  
 #include <cmath>
+#include <queue>
 
 const int N = 100;
 const int RANGE = 100000;
@@ -169,7 +170,7 @@ std::vector<int> PSRS(std::vector<int> array, int rank)
         
     }
 
-    std::vector<int> sorted;
+    std::vector<int> sorted(length);
 
     int strides[PROCESSOR];
     for(int i = 0; i < PROCESSOR; i++)
@@ -184,7 +185,20 @@ std::vector<int> PSRS(std::vector<int> array, int rank)
         }        
     }
 
-    //MPI_Scatterv(toSort, auxSizes, auxIndexes, MPI_INT, sorted.data(), strides[rank], MPI_INT, rank, MPI_COMM_WORLD);
+    for(int i = 0; i < PROCESSOR; i++)
+    {
+        if(i == rank)
+        {
+            sorted.insert(sorted.end(), toSort[auxIndexes[i]], toSort[auxIndexes[i] + auxSizes[i]]);
+        }
+        else
+        {
+            MPI_Scatterv(toSort, auxSizes, auxIndexes, MPI_INT, sorted.data(), strides[i], MPI_INT, rank, MPI_COMM_WORLD);
+            if(rank == 2)std::cout<<i<<std::endl;
+        }
+    }
+    
+    /*
     for(int i = 0; i < PROCESSOR; i++)
     {
         MPI_Send(&toSort[auxIndexes[i]], auxSizes[i], MPI_INT, i, i, MPI_COMM_WORLD);
@@ -192,10 +206,12 @@ std::vector<int> PSRS(std::vector<int> array, int rank)
 
     for(int i = 0; i < PROCESSOR; i++)
     {
+        MPI_Probe(i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         int arr[sizes[i*PROCESSOR + rank]];
         MPI_Recv(arr, sizes[i*PROCESSOR + rank], MPI_INT, i, i, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         sorted.insert(sorted.end(), arr, arr + sizes[i*PROCESSOR + rank]);
-    }
+    }*/
+
 
     // END STEP 4 //
 
