@@ -187,6 +187,8 @@ std::vector<int> PSRS(std::vector<int> array, int rank)
 
     for(int i = 0; i < PROCESSOR; i++)
     {
+        MPI_Scatterv(toSort, auxSizes, auxIndexes, MPI_INT, sorted.data(), strides[i], MPI_INT, rank, MPI_COMM_WORLD);
+        /*
         if(i == rank)
         {
             sorted.insert(sorted.end(), toSort[auxIndexes[i]], toSort[auxIndexes[i] + auxSizes[i]]);
@@ -195,7 +197,7 @@ std::vector<int> PSRS(std::vector<int> array, int rank)
         {
             MPI_Scatterv(toSort, auxSizes, auxIndexes, MPI_INT, sorted.data(), strides[i], MPI_INT, rank, MPI_COMM_WORLD);
             if(rank == 2)std::cout<<i<<std::endl;
-        }
+        }*/
     }
     
     /*
