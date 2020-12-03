@@ -8,9 +8,9 @@
 #include <queue>
 #include <ctime>
 
-const int N = 100;
+const int N = 400;
 const int RANGE = 100000;
-int PROCESSOR = 4;
+int PROCESSOR = 8;
 
 void Swap(int* a, int* b);
 int Partition (int *array, int low, int high) ;
@@ -32,12 +32,11 @@ int main(int argc, char *argv[])
     std::vector<int> array(N);
     std::vector<int> mergeArray(N);
 
-    double totalTime = 0;
-    double totalFPS = 0;
+    auto totalTime = 0;
 
     for(int i = 0; i < 100; i++)
     {
-        double startTime = clock();
+        auto startTime = std::chrono::high_resolution_clock::now();
 
         if(rank == 0)
         {
@@ -53,10 +52,8 @@ int main(int argc, char *argv[])
         MPI_Bcast(array.data(), N, MPI_INT, 0, MPI_COMM_WORLD);
         array = PSRS(array, rank);
 
-        double time = clock() - startTime;
+        auto time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now()-startTime).count();
         totalTime += time;
-        double fps = (1.0/time) * 1000;
-        totalFPS += fps;
     }
 
 
@@ -68,17 +65,16 @@ int main(int argc, char *argv[])
             std::cout<<" " << array[i] << " -"; 
         }
         std::cout << std::endl << std::endl;
-        std::cout<<"Averege elapsed time: "<< (totalFPS/100) <<std::endl<<std::endl;
+        std::cout<<"Averege elapsed time: "<< (totalTime/100.0f) <<std::endl<<std::endl;
     }
 
     //std::cout<<"Averege elapsed time: "<< (time/100) <<std::endl;
 
     totalTime = 0;
-    totalFPS = 0;
 
     for(int i = 0; i < 100; i++)
     {
-        double startTime = clock();
+        auto startTime  = std::chrono::high_resolution_clock::now();
 
         if(rank == 0)
         {
@@ -94,10 +90,8 @@ int main(int argc, char *argv[])
         MergeSort(mergeArray, rank);
 
 
-        double time = clock() - startTime;
+        auto time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now()-startTime).count();
         totalTime += time;
-        double fps = (1.0/time) * 1000;
-        totalFPS += fps;
     }
 
     if(rank == 0)
@@ -108,7 +102,7 @@ int main(int argc, char *argv[])
             std::cout<<" " << array[i] << " -"; 
         }
         std::cout << std::endl << std::endl;
-        std::cout<<"Averege elapsed time: "<< (totalFPS/100) <<std::endl<<std::endl;
+        std::cout<<"Averege elapsed time: "<< (totalTime/100.0f) <<std::endl<<std::endl;
     }
 
     
@@ -122,18 +116,13 @@ std::vector<int> PSRS(std::vector<int> array, int rank)
     int size = N/PROCESSOR;
 
     int *toSort = new int[size]; // -> disjointed vector where the sorting will be performed
-    // BEGIN STEP 1 //
-    
+    // BEGIN STEP 1 //  
     //Distribute array betwen processors
-    MPI_Scatter(array.data(), size, MPI_INT, toSort, size, MPI_INT, 0, MPI_COMM_WORLD);
-    
+    MPI_Scatter(array.data(), size, MPI_INT, toSort, size, MPI_INT, 0, MPI_COMM_WORLD);    
     QuickSort(toSort, 0, size - 1); //-> apply quicksort in all processors
-
     // END STEP 1 //
 
     // BEGIN STEP 2 //
-
-    
     int processorPivots[PROCESSOR]; // -> pivots of each processor array
     int candidatePivots[PROCESSOR*PROCESSOR]; // -> pivots of all processors
     int pivots[PROCESSOR - 1]; // -> selected pivots to implement sort
@@ -188,12 +177,6 @@ std::vector<int> PSRS(std::vector<int> array, int rank)
     //each rank inform of its partition data to the other ranksint *recvRankPartLen = new int[comm_sz];
     int *rankRcvLen = new int[PROCESSOR];
     MPI_Alltoall(sizes, 1, MPI_INT, rankRcvLen, 1, MPI_INT, MPI_COMM_WORLD);
-    /*
-    for(int i = 0; i < PROCESSOR; i++)
-    {
-        MPI_Bcast(&indexes[i*PROCESSOR], PROCESSOR, MPI_INT, i, MPI_COMM_WORLD);
-        MPI_Bcast(&sizes[i*PROCESSOR], PROCESSOR, MPI_INT, i, MPI_COMM_WORLD);  
-    }*/
 
     int rankRcvLength = 0;
     int *rankStartIndexes = new int[PROCESSOR];
@@ -201,116 +184,22 @@ std::vector<int> PSRS(std::vector<int> array, int rank)
         rankStartIndexes[i] = rankRcvLength;
         rankRcvLength += rankRcvLen[i];
     }
-
-
    
     // END STEP 3 //
-
     // BEGIN STEP 4 //
 
-    //Calculate receive buffer size from data pack sizes send to current rank
-    /*
-    int length = 0;
-    for(int i = 0; i < PROCESSOR; i++)
-    {
-        length += sizes[i*PROCESSOR + rank];
-    }
-
-    int auxSizes[PROCESSOR];
-    int auxIndexes[PROCESSOR];
-    for(int i = 0; i < PROCESSOR; i++)
-    {
-        auxIndexes[i] = indexes[rank*PROCESSOR + i];
-        auxSizes[i] = sizes[rank*PROCESSOR + i];
-        
-    }*/
-
     int *sorted = new int[rankRcvLength];
-
-    //std::vector<int> sorted(length);
-
-/*
-    int strides[PROCESSOR];
-    for(int i = 0; i < PROCESSOR; i++)
-    {
-        if(i == 0)
-        {  
-            strides[0] = 0;
-        }
-        else
-        {
-            strides[i] = sizes[(i-1)*PROCESSOR + rank] + strides[i-1];
-        }        
-    }*/
 
     MPI_Alltoallv(toSort, sizes, indexes, MPI_INT, sorted, rankRcvLen, rankStartIndexes, MPI_INT, MPI_COMM_WORLD);
 
     QuickSort(sorted, 0, rankRcvLength - 1);
 
-/*
-    if(rank == 0)
-    {
-        for(int i = 0; i < rankRcvLength; i++)
-        {
-            std::cout<<sorted[i]<<" - ";
-        }
-        std::cout<<std::endl<<std::endl;
-        for(int i = 0; i < size; i++)
-        {
-            std::cout<<toSort[i]<<" - ";
-        }
-        std::cout<<std::endl<<std::endl;
-    }*/
-    
-
-/*
-    for(int i = 0; i < PROCESSOR; i++)
-    {
-        MPI_Scatterv(toSort, auxSizes, auxIndexes, MPI_INT, sorted.data(), strides[i], MPI_INT, rank, MPI_COMM_WORLD);
-        
-        if(i == rank)
-        {
-            sorted.insert(sorted.end(), toSort[auxIndexes[i]], toSort[auxIndexes[i] + auxSizes[i]]);
-        }
-        else
-        {
-            MPI_Scatterv(toSort, auxSizes, auxIndexes, MPI_INT, sorted.data(), strides[i], MPI_INT, rank, MPI_COMM_WORLD);
-            if(rank == 2)std::cout<<i<<std::endl;
-        }
-    }*/
-
-    //std::cout<<"fisnished"<<std::endl;
-    /*
-    for(int i = 0; i < PROCESSOR; i++)
-    {
-        MPI_Send(&toSort[auxIndexes[i]], auxSizes[i], MPI_INT, i, i, MPI_COMM_WORLD);
-    }
-
-    for(int i = 0; i < PROCESSOR; i++)
-    {
-        MPI_Probe(i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        int arr[sizes[i*PROCESSOR + rank]];
-        MPI_Recv(arr, sizes[i*PROCESSOR + rank], MPI_INT, i, i, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        sorted.insert(sorted.end(), arr, arr + sizes[i*PROCESSOR + rank]);
-    }*/
-
-
     // END STEP 4 //
-
     // FINAL STEP //
 
     int lengths[PROCESSOR];
 
     MPI_Gather(&rankRcvLength, 1, MPI_INT, lengths, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    /*if(rank == 1)
-    {
-        std::cout<<lengths[rank]<<" - "<<std::endl;
-        for(int i = 0; i < lengths[rank]; i++)
-        {
-            std::cout<<sorted[i]<<" - ";
-        }
-    }*/
-    
     
     indexes[0] = 0;
     for(int i = 0; i < PROCESSOR - 1; i++)
