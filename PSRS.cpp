@@ -6,6 +6,7 @@
 #include <chrono>  
 #include <cmath>
 #include <queue>
+#include <ctime>
 
 const int N = 100;
 const int RANGE = 100000;
@@ -31,19 +32,33 @@ int main(int argc, char *argv[])
     std::vector<int> array(N);
     std::vector<int> mergeArray(N);
 
-    if(rank == 0)
+    double totalTime = 0;
+    double totalFPS = 0;
+
+    for(int i = 0; i < 100; i++)
     {
-        //Initialization of vector
-        std::mt19937 rng;
-        for(int i = 0; i < N; i++)
+        double startTime = clock();
+
+        if(rank == 0)
         {
-            rng.seed(i);
-            std::generate(array.begin(),array.end(),[&](){return rng()%RANGE;});
+            //Initialization of vector
+            std::mt19937 rng;
+            for(int i = 0; i < N; i++)
+            {
+                rng.seed(clock());
+                std::generate(array.begin(),array.end(),[&](){return rng()%RANGE;});
+            }
         }
+
+        MPI_Bcast(array.data(), N, MPI_INT, 0, MPI_COMM_WORLD);
+        array = PSRS(array, rank);
+
+        double time = clock() - startTime;
+        totalTime += time;
+        double fps = (1.0/time) * 1000;
+        totalFPS += fps;
     }
 
-    MPI_Bcast(array.data(), N, MPI_INT, 0, MPI_COMM_WORLD);
-    array = PSRS(array, rank);
 
     if(rank == 0)
     {
@@ -53,25 +68,51 @@ int main(int argc, char *argv[])
             std::cout<<" " << array[i] << " -"; 
         }
         std::cout << std::endl << std::endl;
+        std::cout<<"Averege elapsed time: "<< (totalFPS/100) <<std::endl<<std::endl;
     }
 
+    //std::cout<<"Averege elapsed time: "<< (time/100) <<std::endl;
 
+    totalTime = 0;
+    totalFPS = 0;
+
+    for(int i = 0; i < 100; i++)
+    {
+        double startTime = clock();
+
+        if(rank == 0)
+        {
+            //Initialization of vector
+            std::mt19937 rng;
+            for(int i = 0; i < N; i++)
+            {
+                rng.seed(clock());
+                std::generate(mergeArray.begin(),mergeArray.end(),[&](){return rng()%RANGE;});
+            }
+        }
+        MPI_Bcast(mergeArray.data(), N, MPI_INT, 0, MPI_COMM_WORLD);
+        MergeSort(mergeArray, rank);
+
+
+        double time = clock() - startTime;
+        totalTime += time;
+        double fps = (1.0/time) * 1000;
+        totalFPS += fps;
+    }
 
     if(rank == 0)
     {
-        //Initialization of vector
-        std::mt19937 rng;
+        std::cout<<" Vector: "<<std::endl; 
         for(int i = 0; i < N; i++)
         {
-            rng.seed(i);
-            std::generate(mergeArray.begin(),mergeArray.end(),[&](){return rng()%RANGE;});
+            std::cout<<" " << array[i] << " -"; 
         }
+        std::cout << std::endl << std::endl;
+        std::cout<<"Averege elapsed time: "<< (totalFPS/100) <<std::endl<<std::endl;
     }
-    MPI_Bcast(mergeArray.data(), N, MPI_INT, 0, MPI_COMM_WORLD);
-    MergeSort(mergeArray, rank);
 
-    MPI_Bcast(mergeArray.data(), N, MPI_INT, 0, MPI_COMM_WORLD);
-    MPI_Finalize();
+    
+    //MPI_Finalize();
 
 }
 
@@ -352,11 +393,6 @@ std::vector<int> MergeSort (std::vector<int> nums, int rank)
 				std::inplace_merge(nums.begin()+i*N/step,nums.begin()+(i+1)*N/step,nums.begin()+(i+2)*N/step);
 			}
 		}
-
-    	std::cout<<std::endl<<std::endl;
-		auto print = [](const int& n) { std::cout << " - " << n; };
-     	std::for_each(std::begin(nums), std::end(nums), print);
-    	std::cout<<std::endl;
 	}
 
     return nums;		
